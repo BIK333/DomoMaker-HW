@@ -7,8 +7,21 @@ const loginPage = (req, res) => res.render('login');
 
 const signupPage = (req, res) => res.render('signup');
 
-const logout = (req, res) => res.redirect('/');
+// Step 8 - Destroy the session when logging out
+const logout = (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({
+        error: 'Unable to log out',
+      });
+    }
 
+    res.clearCookie('sessionid');
+    return res.redirect('/');
+  });
+};
+
+// Step 10 - Create an account and start a session
 const signup = async (req, res) => {
   const username = `${req.body.username || ''}`;
   const pass = `${req.body.pass || ''}`;
@@ -36,6 +49,9 @@ const signup = async (req, res) => {
 
     await newAccount.save();
 
+    // Save the newly created account in the session
+    req.session.account = Account.toAPI(newAccount);
+
     return res.json({ redirect: '/maker' });
   } catch (err) {
     console.error(err);
@@ -52,6 +68,7 @@ const signup = async (req, res) => {
   }
 };
 
+// Step 9 - Authenticate and start a session
 const login = (req, res) => {
   const username = `${req.body.username || ''}`;
   const pass = `${req.body.pass || ''}`;
@@ -68,6 +85,9 @@ const login = (req, res) => {
         error: 'Wrong username or password!',
       });
     }
+
+    // Save the authenticated account in the session
+    req.session.account = Account.toAPI(account);
 
     return res.json({ redirect: '/maker' });
   });

@@ -5,6 +5,7 @@ const compression = require('compression');
 const mongoose = require('mongoose');
 const expressHandlebars = require('express-handlebars');
 const helmet = require('helmet');
+const session = require('express-session');
 
 const router = require('./router.js');
 
@@ -18,6 +19,8 @@ const port = process.env.PORT || process.env.NODE_PORT || 3000;
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 app.use('/assets', express.static(path.resolve(__dirname, '../hosted')));
@@ -26,6 +29,18 @@ app.use(compression());
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+app.use(session({
+    name: 'sessionid',
+    secret: process.env.SESSION_SECRET || 'domomaker-local-development-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    },
+}));
 
 app.engine('handlebars', expressHandlebars.engine({
   defaultLayout: false,
