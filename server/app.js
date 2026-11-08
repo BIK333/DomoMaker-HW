@@ -1,4 +1,6 @@
 
+require('dotenv').config();
+
 const path = require('path');
 const express = require('express');
 const compression = require('compression');
@@ -6,32 +8,59 @@ const mongoose = require('mongoose');
 const expressHandlebars = require('express-handlebars');
 const helmet = require('helmet');
 const session = require('express-session');
+const redis = require('redis');
+const { RedisStore } = require('connect-redis');
 
 const router = require('./router.js');
 
+// MongoDB connection
 const dbURI = process.env.MONGODB_URI || 'mongodb://127.0.0.1/DomoMaker';
 
 mongoose.connect(dbURI).catch((err) => {
   console.error('Could not connect to MongoDB:', err);
 });
 
+// Server port
 const port = process.env.PORT || process.env.NODE_PORT || 3000;
 
-const app = express();
+// Redis Cloud connection
+const redisClient = redis.createClient({
+  url: process.env.REDISCLOUD_URL,
+});
 
-app.set('trust proxy', 1);
+redisClient.on('error', (err) => {
+  console.error('Redis connection error:', err);
+});
 
-app.use(helmet());
+// Connect to Redis before starting the Express server
+redisClient.connect().then(() => {
+  console.log('Connected to Redis');
 
-app.use('/assets', express.static(path.resolve(__dirname, '../hosted')));
+  const app = express();
 
-app.use(compression());
+  // Trust Heroku's reverse proxy
+  app.set('trust proxy', 1);
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+  // Security middleware
+  app.use(helmet());
 
-app.use(session({
+  // Static assets
+  app.use('/assets', express.static(path.resolve(__dirname, '../hosted')));
+
+  // Compression
+  app.use(compression());
+
+  // Parse incoming form and JSON data
+  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json());
+
+  // Store sessions in Redis
+  app.use(session({
     name: 'sessionid',
+    store: new RedisStore({
+      client: redisClient,
+      prefix: 'domomaker:',
+    }),
     secret: process.env.SESSION_SECRET || 'domomaker-local-development-secret',
     resave: false,
     saveUninitialized: false,
@@ -40,21 +69,32 @@ app.use(session({
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
     },
-}));
+  }));
 
-app.engine('handlebars', expressHandlebars.engine({
-  defaultLayout: false,
-}));
+  // Handlebars configuration
+  app.engine('handlebars', expressHandlebars.engine({
+    defaultLayout: false,
+  }));
 
-app.set('view engine', 'handlebars');
-app.set('views', path.resolve(__dirname, '../views'));
+  app.set('view engine', 'handlebars');
+  app.set('views', path.resolve(__dirname, '../views'));
 
-router(app);
+  // Require HTTPS when running in production
+  const { requiresSecure } = require('./middleware');
+  app.use(requiresSecure);
 
-app.listen(port, (err) => {
-  if (err) {
-    throw err;
-  }
+  // Register application routes
+  router(app);
 
-  console.log(`Listening on port ${port}`);
+  // Start server
+  app.listen(port, (err) => {
+    if (err) {
+      throw err;
+    }
+
+    console.log(`Listening on port ${port}`);
+  });
+}).catch((err) => {
+  console.error('Failed to connect to Redis:', err);
+  process.exitCode = 1;
 });

@@ -1,19 +1,24 @@
-
+const middleware = require('./middleware');
 const controllers = require('./controllers');
 
 const router = (app) => {
-  app.get('/login', controllers.Account.loginPage);
-  app.post('/login', controllers.Account.login);
+  // Login routes - only available when logged out
+  app.get('/login', middleware.requiresLogout, controllers.Account.loginPage);
+  app.post('/login', middleware.requiresLogout, controllers.Account.login);
 
-  app.get('/signup', controllers.Account.signupPage);
-  app.post('/signup', controllers.Account.signup);
+  // Signup routes - only available when logged out
+  app.get('/signup', middleware.requiresLogout, controllers.Account.signupPage);
+  app.post('/signup', middleware.requiresLogout, controllers.Account.signup);
 
-  app.get('/logout', controllers.Account.logout);
+  // Logout route - only available when logged in
+  app.get('/logout', middleware.requiresLogin, controllers.Account.logout);
 
-  app.get('/maker', controllers.Domo.makerPage);
-  app.post('/maker', controllers.Domo.makeDomo);
+  // Maker routes - only available when logged in
+  app.get('/maker', middleware.requiresLogin, controllers.Domo.makerPage);
+  app.post('/maker', middleware.requiresLogin, controllers.Domo.makeDomo);
 
-  app.get('/', controllers.Account.loginPage);
+  // Home page - only available when logged out
+  app.get('/', middleware.requiresLogout, controllers.Account.loginPage);
 };
 
 module.exports = router;
